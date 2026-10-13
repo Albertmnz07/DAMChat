@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notas de clase</title>
+<style>
+  :root{
+    --paper:#EEF1F4; --ink:#17212B; --muted:#5F6E7C; --line:#D3DAE1; --card:#FFFFFF;
+    --accent:#1F4FD8; --accent-ink:#FFFFFF; --hl:#FFE46B; --bad:#C5322A; --ok:#1E8A52; --warn:#B7791F;
+    --sans: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: "Cascadia Code", "JetBrains Mono", "SF Mono", Consolas, Menlo, "Liberation Mono", monospace;
+    color-scheme: light;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.45 var(--sans)}
+  body.editing{overflow:hidden}
+  [hidden]{display:none !important}
+  button,input,textarea{font:inherit;color:inherit}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* ---------- Botones ---------- */
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:6px;border:1px solid var(--line);background:#fff;cursor:pointer;white-space:nowrap}
+  .btn:hover{border-color:#aab5c0}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+  .btn.primary:hover{background:#1a43b8}
+  .btn.danger{color:var(--bad)}
+  .btn.danger:hover{border-color:var(--bad);background:#fdf1f0}
+  .btn svg{width:16px;height:16px;flex:none}
+
+  /* ---------- Pantalla de conexión ---------- */
+  .connect{min-height:100%;display:grid;place-items:center;padding:24px}
+  .connect-card{width:100%;max-width:420px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:28px}
+  .connect-card h1{margin:0 0 6px;font-size:24px;letter-spacing:-.01em}
+  .connect-card p{margin:0 0 18px;color:var(--muted)}
+  .connect-card label{display:block;font-weight:600;margin-bottom:6px}
+  .connect-card input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:6px;font-family:var(--mono);font-size:16px}
+  .connect-card .hint{margin:6px 0 16px;font-size:13px;color:var(--muted)}
+  .connect-card .btn{width:100%;justify-content:center;padding:10px}
+  .connect-err{margin-top:14px;color:var(--bad);font-size:14px}
+
+  /* ---------- Barra superior ---------- */
+  .bar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:10px 20px;background:#fff;border-bottom:1px solid var(--line)}
+  .brand{font-size:18px;font-weight:700;letter-spacing:-.01em;margin-right:4px}
+  .count{color:var(--muted);font-size:14px}
+  .search{flex:1 1 200px;max-width:360px;padding:7px 12px;border:1px solid var(--line);border-radius:6px;background:var(--paper)}
+  .spacer{flex:1}
+  .conn{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);font-family:var(--mono)}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--ok)}
+  .conn.off .dot{background:var(--warn)}
+  .offline{background:#FFF4DB;color:#7a5410;border-bottom:1px solid #ecd9a4;padding:8px 20px;font-size:14px}
+
+  /* ---------- Rejilla de notas ---------- */
+  main{padding:20px;max-width:1400px;margin:0 auto}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+  .card{position:relative;display:flex;flex-direction:column;height:220px;padding:12px 14px 10px;background:var(--card);
+        border:1px solid var(--line);border-top:4px solid hsl(var(--hue) 60% 50%);border-radius:6px;cursor:pointer;overflow:hidden}
+  .card:hover{border-color:#aab5c0;border-top-color:hsl(var(--hue) 60% 50%)}
+  .card h3{margin:0;padding-right:30px;font-size:17px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card h3.untitled{color:var(--muted);font-style:italic;font-weight:500}
+  .card pre{flex:1;margin:8px 0 0;overflow:hidden;font:12.5px/1.45 var(--mono);tab-size:4;-moz-tab-size:4;white-space:pre;color:#2d3a46;
+            -webkit-mask-image:linear-gradient(#000 72%,transparent);mask-image:linear-gradient(#000 72%,transparent)}
+  .card.blank pre{color:var(--muted);font-family:var(--sans);font-style:italic}
+  .card footer{padding-top:6px;font-size:12px;color:var(--muted)}
+  .card .del{position:absolute;top:8px;right:8px;width:28px;height:28px;display:grid;place-items:center;border:0;border-radius:6px;background:transparent;color:var(--muted);cursor:pointer;opacity:0}
+  .card:hover .del,.card:focus-within .del{opacity:1}
+  .card .del:hover{background:#fdf1f0;color:var(--bad)}
+  .card .del svg{width:16px;height:16px}
+  @media (hover:none){ .card .del{opacity:1} }
+  @keyframes flash{from{background:var(--hl)}to{background:var(--card)}}
+  .card.flash{animation:flash 2.6s ease-out}
+  .empty{padding:60px 20px;text-align:center;color:var(--muted)}
+  .empty strong{display:block;color:var(--ink);font-size:17px;margin-bottom:4px}
+
+  /* ---------- Editor ---------- */
+  .panel{position:fixed;inset:0;z-index:20;display:flex;justify-content:flex-end;background:rgba(23,33,43,.4)}
+  .sheet{width:min(820px,100%);height:100%;display:flex;flex-direction:column;background:#fff;box-shadow:-1px 0 0 var(--line)}
+  @keyframes slide{from{transform:translateX(32px);opacity:.4}to{transform:none;opacity:1}}
+  .panel:not([hidden]) .sheet{animation:slide .16s ease-out}
+  .sheet-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--line)}
+  .status{font-size:13px;color:var(--muted)}
+  .status.ok{color:var(--ok)}
+  .status.err{color:var(--bad)}
+  .title-in{width:100%;border:0;border-bottom:1px solid var(--line);padding:14px 20px;font-size:22px;font-weight:650;letter-spacing:-.01em;outline:none}
+  .title-in:focus{border-bottom-color:var(--accent)}
+  .body-in{flex:1;width:100%;border:0;resize:none;outline:none;padding:16px 20px;font:14px/1.55 var(--mono);tab-size:4;-moz-tab-size:4;white-space:pre;overflow:auto;background:#fff}
+  .sheet-foot{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;padding:8px 20px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+  .sheet-foot label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+  .sheet-foot .spacer{flex:1}
+
+  /* ---------- Aviso ---------- */
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:40;max-width:90vw;padding:10px 16px;border-radius:6px;background:var(--ink);color:#fff;font-size:14px}
+
+  @media (max-width:640px){
+    .bar{padding:10px 12px} main{padding:12px}
+    .sheet-head .btn span{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .card.flash{animation:none;background:var(--hl)}
+    .panel:not([hidden]) .sheet{animation:none}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ Pantalla 1: pedir la IP ============ -->
+<section class="connect" id="connectView">
+  <div class="connect-card">
+    <h1>Notas de clase</h1>
+    <p>Escribe la IP del equipo que hospeda el servidor.</p>
+    <label for="ipInput">IP del servidor</label>
+    <input id="ipInput" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="192.168.1.25">
+    <div class="hint">Si no indicas puerto se usa el 8080. También vale <code>192.168.1.25:9000</code>.</div>
+    <button class="btn primary" id="connectBtn" type="button">Conectar</button>
+    <div class="connect-err" id="connectErr" role="alert" hidden></div>
+  </div>
+</section>
+
+<!-- ============ Pantalla 2: las notas ============ -->
+<div id="appView" hidden>
+  <header class="bar">
+    <span class="brand">Notas de clase</span>
+    <span class="count" id="countEl"></span>
+    <input class="search" id="search" type="search" placeholder="Buscar en títulos y texto" aria-label="Buscar notas">
+    <span class="spacer"></span>
+    <span class="conn" id="conn"><span class="dot"></span><span id="connText"></span></span>
+    <button class="btn" id="changeBtn" type="button">Cambiar servidor</button>
+    <button class="btn primary" id="newBtn" type="button">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+      Nueva nota
+    </button>
+  </header>
+  <div class="offline" id="offline" hidden>Sin conexión con el servidor. Reintentando cada pocos segundos…</div>
+
+  <main>
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty" hidden></div>
+  </main>
+</div>
+
+<!-- ============ Editor ============ -->
+<div class="panel" id="panel" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Editar nota">
+    <div class="sheet-head">
+      <button class="btn" id="closeBtn" type="button" title="Cerrar (Esc)">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>
+        Volver
+      </button>
+      <span class="status" id="saveStatus" aria-live="polite"></span>
+      <span class="spacer"></span>
+      <button class="btn" id="copyBtn" type="button" title="Copiar todo el texto">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg>
+        <span>Copiar</span>
+      </button>
+      <button class="btn" id="dlBtn" type="button" title="Descargar como .txt">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8M4.5 7L8 10.5 11.5 7M2.5 13.5h11"/></svg>
+        <span>Descargar</span>
+      </button>
+      <button class="btn danger" id="delBtn" type="button" title="Borrar nota">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.5 7v4M9.5 7v4"/></svg>
+        <span>Borrar</span>
+      </button>
+    </div>
+    <input class="title-in" id="titleIn" type="text" placeholder="Título" aria-label="Título" autocomplete="off" spellcheck="false">
+    <textarea class="body-in" id="bodyIn" placeholder="Escribe o pega aquí. La tecla Tab inserta una tabulación." aria-label="Contenido" wrap="off" spellcheck="false" autocapitalize="off"></textarea>
+    <div class="sheet-foot">
+      <span id="counts"></span>
+      <span class="spacer"></span>
+      <span>Tab: sangrar · Mayús+Tab: quitar sangría · Ctrl+S: guardar</span>
+      <label><input type="checkbox" id="wrapChk"> Ajustar líneas</label>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+  /* ======================= CONFIGURACIÓN ======================= */
+  // Nombres de los campos de tu clase Note en Java. Cámbialos si son otros.
+  const FIELD_TITLE = 'title';
+  const FIELD_BODY  = 'content';
+  const API_PATH    = '/api/notes';
+  const DEFAULT_PORT = 8082;
+  const POLL_MS     = 2000;   // cada cuánto se consulta al servidor
+  const SAVE_DELAY  = 500;    // espera tras dejar de teclear antes de guardar
+  /* ============================================================= */
+
+  const $ = s => document.querySelector(s);
+  const connectView = $('#connectView'), appView = $('#appView');
+  const ipInput = $('#ipInput'), connectBtn = $('#connectBtn'), connectErr = $('#connectErr');
+  const grid = $('#grid'), emptyEl = $('#empty'), search = $('#search'), countEl = $('#countEl');
+  const conn = $('#conn'), connText = $('#connText'), offlineBar = $('#offline');
+  const panel = $('#panel'), saveStatus = $('#saveStatus'), titleIn = $('#titleIn'), bodyIn = $('#bodyIn');
+  const counts = $('#counts'), wrapChk = $('#wrapChk'), toastEl = $('#toast');
+
+  const store = {
+    get(k){ try { return localStorage.getItem(k); } catch { return null; } },
+    set(k,v){ try { localStorage.setItem(k,v); } catch {} }
+  };
+
+  /* ---------- Estado ---------- */
+  let base = null;                 // p. ej. "http://192.168.1.25:8080"
+  let session = 0;                 // se incrementa al cambiar de servidor para cancelar sondeos antiguos
+  let pollTimer = null;
+  let firstLoad = true;
+  const notesById = new Map();     // id -> nota
+  let order = [];                  // ids en el orden en que se muestran
+  const cards = new Map();         // id -> elemento DOM
+
+  let current = null;              // id de la nota abierta en el editor
+  let dirty = false;               // hay cambios locales sin guardar
+  let inflight = 0;                // guardados en curso
+  let epoch = 0;                   // sube con cada edición local
+  let structEpoch = 0;             // sube al crear/borrar notas localmente
+  let saveTimer = null;
+
+  /* ---------- Utilidades ---------- */
+  const sig = n => (n[FIELD_TITLE] ?? '') + '\u0000' + (n[FIELD_BODY] ?? '');
+  const titleOf = n => n[FIELD_TITLE] ?? '';
+  const bodyOf  = n => n[FIELD_BODY] ?? '';
+
+  function toast(msg){
+    toastEl.textContent = msg; toastEl.hidden = false;
+    clearTimeout(toast._t); toast._t = setTimeout(() => toastEl.hidden = true, 3200);
+  }
+
+  function normalizeServer(v){
+    v = v.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+    if (!v) return null;
+    if (!/:\d+$/.test(v)) v += ':' + DEFAULT_PORT;
+    return 'http://' + v;
+  }
+
+  async function api(path = '', opts = {}, timeout = 5000){
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeout);
+    try {
+      const init = { ...opts, signal: ctrl.signal };
+      if (opts.body) init.headers = { 'Content-Type': 'application/json' };
+      const res = await fetch(base + API_PATH + path, init);
+      if (!res.ok) {
+        const e = new Error('HTTP ' + res.status); e.status = res.status;
+        try { e.detail = (await res.text()).slice(0, 300); } catch {}
+        throw e;
+      }
+      if (res.status === 204) return null;
+      const text = await res.text();
+      return text ? JSON.parse(text) : null;
+    } finally { clearTimeout(t); }
+  }
+
+  /* ---------- Conexión ---------- */
+  const saved = store.get('notas.server');
+  ipInput.value = saved || (/^https?:$/.test(location.protocol) ? location.host : '');
+  ipInput.focus();
+
+  async function connect(){
+    const target = normalizeServer(ipInput.value);
+    if (!target) { showConnectErr('Escribe la IP del servidor.'); return; }
+    base = target;
+    connectBtn.disabled = true; connectBtn.textContent = 'Conectando…'; connectErr.hidden = true;
+    try {
+      const list = await api('', {}, 4000);
+      store.set('notas.server', ipInput.value.trim());
+      startSession(list);
+    } catch (e) {
+      showConnectErr(`No se pudo conectar con ${target.replace('http://','')}. Comprueba la IP, que el servidor esté arrancado y que el cortafuegos deje pasar ese puerto.`);
+    } finally {
+      connectBtn.disabled = false; connectBtn.textContent = 'Conectar';
+    }
+  }
+  function showConnectErr(msg){ connectErr.textContent = msg; connectErr.hidden = false; }
+
+  function startSession(firstList){
+    session++;
+    firstLoad = true; notesById.clear(); order = []; cards.clear(); grid.innerHTML = '';
+    connectView.hidden = true; appView.hidden = false;
+    connText.textContent = base.replace('http://','');
+    setOnline(true);
+    applyList(firstList, epoch, structEpoch);
+    schedulePoll(session);
+  }
+
+  function disconnect(){
+    session++; clearTimeout(pollTimer);
+    if (current) closeEditor();
+    appView.hidden = true; connectView.hidden = false; ipInput.focus();
+  }
+
+  function setOnline(on){
+    conn.classList.toggle('off', !on);
+    offlineBar.hidden = on;
+  }
+
+  /* ---------- Sondeo en tiempo real ---------- */
+  function schedulePoll(mySession){
+    clearTimeout(pollTimer);
+    pollTimer = setTimeout(() => poll(mySession), POLL_MS);
+  }
+  async function poll(mySession){
+    if (mySession !== session) return;
+    const e0 = epoch, s0 = structEpoch;
+    try {
+      const list = await api();
+      if (mySession !== session) return;
+      setOnline(true);
+      applyList(list, e0, s0);
+    } catch { if (mySession === session) setOnline(false); }
+    if (mySession === session) schedulePoll(mySession);
+  }
+
+  function reconcileOrder(ids){
+    const present = new Set(ids);
+    order = order.filter(id => present.has(id));
+    const known = new Set(order);
+    const fresh = ids.filter(id => !known.has(id));
+    order = firstLoad ? ids.slice() : [...fresh, ...order];   // las notas nuevas aparecen arriba
+  }
+
+  function applyList(list, startEpoch, startStruct){
+    if (!Array.isArray(list)) return;
+    if (startStruct !== structEpoch) return;   // hubo un alta/baja local mientras se pedía: se ignora este ciclo
+    const protectCurrent = current && (dirty || inflight > 0 || epoch !== startEpoch);
+    const changed = new Set(), seen = new Set();
+
+    for (const n of list){
+      seen.add(n.id);
+      if (protectCurrent && n.id === current && notesById.has(n.id)) continue;   // gana lo que estoy escribiendo
+      const old = notesById.get(n.id);
+      if (!old || sig(old) !== sig(n)){
+        if (old && !firstLoad) changed.add(n.id);
+        notesById.set(n.id, n);
+      }
+    }
+    for (const id of [...notesById.keys()]) if (!seen.has(id)) notesById.delete(id);
+
+    reconcileOrder(list.map(n => n.id));
+    firstLoad = false;
+    render(changed);
+
+    if (current){
+      if (!notesById.has(current)){
+        closeEditor(true);
+        toast('Alguien borró la nota que tenías abierta.');
+      } else if (!protectCurrent){
+        syncEditor();
+      }
+    }
+  }
+
+  /* ---------- Render de la rejilla ---------- */
+  function hueOf(id){ let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
+
+  function preview(text){
+    return text.split('\n').slice(0, 10).map(l => l.length > 90 ? l.slice(0, 90) + '…' : l).join('\n');
+  }
+
+  function makeCard(id){
+    const el = document.createElement('article');
+    el.className = 'card'; el.tabIndex = 0;
+    el.style.setProperty('--hue', hueOf(id));
+    el.innerHTML = `
+      <h3></h3>
+      <button class="del" type="button" title="Borrar nota" aria-label="Borrar nota">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.5 7v4M9.5 7v4"/></svg>
+      </button>
+      <pre></pre>
+      <footer></footer>`;
+    el.addEventListener('click', e => {
+      if (e.target.closest('.del')) { removeNote(id); return; }
+      openEditor(id);
+    });
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target === el) openEditor(id); });
+    return el;
+  }
+
+  function fillCard(el, n){
+    const t = titleOf(n), b = bodyOf(n);
+    const h3 = el.querySelector('h3');
+    h3.textContent = t || 'Sin título';
+    h3.classList.toggle('untitled', !t);
+    el.classList.toggle('blank', !b);
+    el.querySelector('pre').textContent = b ? preview(b) : 'Nota vacía';
+    const lines = b ? b.split('\n').length : 0;
+    el.querySelector('footer').textContent = b ? `${lines} ${lines === 1 ? 'línea' : 'líneas'}` : '';
+  }
+
+  function flash(el){ el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+
+  function render(changed = new Set()){
+    const q = search.value.trim().toLowerCase();
+    for (const [id, el] of cards) if (!notesById.has(id)) { el.remove(); cards.delete(id); }
+
+    let visible = 0, i = 0;
+    for (const id of order){
+      const n = notesById.get(id); if (!n) continue;
+      let el = cards.get(id);
+      if (!el) { el = makeCard(id); cards.set(id, el); }
+      const s = sig(n);
+      if (el._sig !== s){ fillCard(el, n); el._sig = s; if (changed.has(id)) flash(el); }
+      if (grid.children[i] !== el) grid.insertBefore(el, grid.children[i] || null);
+      const match = !q || titleOf(n).toLowerCase().includes(q) || bodyOf(n).toLowerCase().includes(q);
+      el.hidden = !match;
+      if (match) visible++;
+      i++;
+    }
+
+    const total = notesById.size;
+    countEl.textContent = q ? `${visible} de ${total}` : (total === 1 ? '1 nota' : `${total} notas`);
+    if (total === 0){
+      emptyEl.innerHTML = '<strong>Aún no hay notas</strong>Crea la primera con «Nueva nota».'; emptyEl.hidden = false;
+    } else if (visible === 0){
+      emptyEl.innerHTML = '<strong>Sin resultados</strong>Ninguna nota contiene ese texto.'; emptyEl.hidden = false;
+    } else emptyEl.hidden = true;
+  }
+
+  /* ---------- Crear y borrar ---------- */
+  async function createNote(){
+    const post = (t, b) => api('', { method: 'POST', body: JSON.stringify({ [FIELD_TITLE]: t, [FIELD_BODY]: b }) });
+    try {
+      let n;
+      try {
+        n = await post('', '');
+      } catch (e) {
+        // Si el servidor rechaza campos vacíos (validación), se reintenta con valores de relleno
+        if (e.status >= 400 && e.status < 500 || e.status === 500) n = await post('Nueva nota', ' ');
+        else throw e;
+      }
+      if (!n || n.id == null) throw new Error('La respuesta del servidor no incluye "id"');
+      structEpoch++;
+      notesById.set(n.id, n); order.unshift(n.id);
+      search.value = '';
+      render();
+      openEditor(n.id, true);
+    } catch (e) {
+      console.error('Error al crear nota:', e);
+      const extra = e.status ? ` (HTTP ${e.status}${e.detail ? ': ' + e.detail.replace(/\s+/g, ' ').slice(0, 140) : ''})` : (e.message ? ` (${e.message})` : '');
+      toast('No se pudo crear la nota' + extra);
+    }
+  }
+
+  async function removeNote(id){
+    const n = notesById.get(id); if (!n) return;
+    if (!confirm(`¿Borrar «${titleOf(n) || 'Sin título'}»? Se borrará para todos.`)) return;
+    try {
+      await api('/' + id, { method: 'DELETE' });
+    } catch (e) {
+      if (e.status !== 404) { toast('No se pudo borrar la nota.'); return; }
+    }
+    structEpoch++;
+    if (current === id) closeEditor(true);
+    notesById.delete(id); order = order.filter(x => x !== id);
+    render();
+    toast('Nota borrada');
+  }
+
+  /* ---------- Editor ---------- */
+  function setStatus(text, kind = ''){ saveStatus.textContent = text; saveStatus.className = 'status ' + kind; }
+  function updateCounts(){
+    const v = bodyIn.value, lines = v ? v.split('\n').length : 0;
+    counts.textContent = `${lines} ${lines === 1 ? 'línea' : 'líneas'} · ${v.length} caracteres`;
+  }
+
+  function openEditor(id, focusTitle = false){
+    const n = notesById.get(id); if (!n) return;
+    current = id; dirty = false;
+    titleIn.value = titleOf(n); bodyIn.value = bodyOf(n);
+    panel.hidden = false; document.body.classList.add('editing');
+    setStatus('Guardado', 'ok'); updateCounts();
+    (focusTitle ? titleIn : bodyIn).focus();
+    if (!focusTitle) bodyIn.setSelectionRange(0, 0);
+  }
+
+  function closeEditor(discard = false){
+    if (!current) return;
+    clearTimeout(saveTimer);
+    if (dirty && !discard) save();
+    current = null; dirty = false;
+    panel.hidden = true; document.body.classList.remove('editing');
+  }
+
+  // Trae al editor los cambios de otra persona (solo si yo no tengo cambios pendientes)
+  function syncEditor(){
+    const n = notesById.get(current); if (!n) return;
+    const t = titleOf(n), b = bodyOf(n);
+    if (titleIn.value === t && bodyIn.value === b) return;
+    const s = bodyIn.selectionStart, e = bodyIn.selectionEnd, top = bodyIn.scrollTop;
+    titleIn.value = t; bodyIn.value = b;
+    bodyIn.setSelectionRange(Math.min(s, b.length), Math.min(e, b.length));
+    bodyIn.scrollTop = top;
+    updateCounts();
+    setStatus('Actualizada por otra persona', 'ok');
+  }
+
+  function onEdit(){
+    if (!current) return;
+    dirty = true; epoch++;
+    setStatus('Guardando…');
+    updateCounts();
+    const n = notesById.get(current);
+    if (n){ n[FIELD_TITLE] = titleIn.value; n[FIELD_BODY] = bodyIn.value; render(); }
+    clearTimeout(saveTimer); saveTimer = setTimeout(save, SAVE_DELAY);
+  }
+
+  async function save(){
+    clearTimeout(saveTimer);
+    const id = current;
+    if (!id || !dirty) return;
+    const snapshot = epoch;
+    const payload = JSON.stringify({ [FIELD_TITLE]: titleIn.value, [FIELD_BODY]: bodyIn.value });
+    inflight++;
+    try {
+      await api('/' + id, { method: 'PATCH', body: payload });
+      if (current === id){
+        if (epoch === snapshot){ dirty = false; setStatus('Guardado', 'ok'); }
+      }
+      epoch++;   // un sondeo que empezó antes de guardar no debe pisar el editor
+    } catch (e) {
+      if (current === id){
+        if (e.status === 404){ closeEditor(true); toast('Esa nota ya no existe.'); }
+        else { setStatus('No se pudo guardar. Reintentando…', 'err'); saveTimer = setTimeout(save, 2000); }
+      }
+    } finally { inflight--; }
+  }
+
+  /* ---------- Teclado del área de texto (tabulaciones) ---------- */
+  function insertText(text){
+    if (!document.execCommand('insertText', false, text)){
+      bodyIn.setRangeText(text, bodyIn.selectionStart, bodyIn.selectionEnd, 'end');
+      bodyIn.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+
+  bodyIn.addEventListener('keydown', e => {
+    if (e.isComposing) return;
+
+    if (e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey){
+      e.preventDefault();
+      const v = bodyIn.value, s = bodyIn.selectionStart, en = bodyIn.selectionEnd;
+      const multi = v.slice(s, en).includes('\n');
+      if (!e.shiftKey && !multi){ insertText('\t'); return; }
+
+      // sangrar / quitar sangría a las líneas seleccionadas
+      const lineStart = s === 0 ? 0 : v.lastIndexOf('\n', s - 1) + 1;
+      let lineEnd = (en > s && v[en - 1] === '\n') ? en - 1 : v.indexOf('\n', en);
+      if (lineEnd === -1) lineEnd = v.length;
+      const block = v.slice(lineStart, lineEnd);
+      const out = e.shiftKey ? block.replace(/^(\t| {1,4})/gm, '') : block.replace(/^/gm, '\t');
+      if (out === block) return;
+      bodyIn.setSelectionRange(lineStart, lineEnd);
+      insertText(out);
+      bodyIn.setSelectionRange(lineStart, lineStart + out.length);
+      return;
+    }
+
+    // Enter conserva la sangría de la línea anterior
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey){
+      const v = bodyIn.value, s = bodyIn.selectionStart;
+      const ls = s === 0 ? 0 : v.lastIndexOf('\n', s - 1) + 1;
+      const indent = v.slice(ls, s).match(/^[\t ]*/)[0];
+      if (indent){ e.preventDefault(); insertText('\n' + indent); }
+    }
+  });
+
+  titleIn.addEventListener('keydown', e => {
+    if (e.key === 'Enter'){ e.preventDefault(); bodyIn.focus(); }
+  });
+
+  titleIn.addEventListener('input', onEdit);
+  bodyIn.addEventListener('input', onEdit);
+
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && current){ e.preventDefault(); save(); }
+    if (e.key === 'Escape' && current) closeEditor();
+  });
+
+  /* ---------- Utilidades del editor ---------- */
+  async function copyBody(){
+    const text = bodyIn.value;
+    try {
+      if (navigator.clipboard && window.isSecureContext){ await navigator.clipboard.writeText(text); toast('Texto copiado'); return; }
+    } catch {}
+    // En http por IP local no hay API de portapapeles: se usa el método clásico
+    const s = bodyIn.selectionStart, e = bodyIn.selectionEnd;
+    bodyIn.focus(); bodyIn.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch {}
+    bodyIn.setSelectionRange(s, e);
+    toast(ok ? 'Texto copiado' : 'No se pudo copiar; selecciona el texto y usa Ctrl+C');
+  }
+
+  function downloadBody(){
+    const name = (titleIn.value.trim() || 'nota').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 60) + '.txt';
+    const url = URL.createObjectURL(new Blob([bodyIn.value], { type: 'text/plain;charset=utf-8' }));
+    const a = Object.assign(document.createElement('a'), { href: url, download: name });
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  /* ---------- Eventos de la interfaz ---------- */
+  connectBtn.addEventListener('click', connect);
+  ipInput.addEventListener('keydown', e => { if (e.key === 'Enter') connect(); });
+  $('#changeBtn').addEventListener('click', disconnect);
+  $('#newBtn').addEventListener('click', createNote);
+  $('#closeBtn').addEventListener('click', () => closeEditor());
+  $('#copyBtn').addEventListener('click', copyBody);
+  $('#dlBtn').addEventListener('click', downloadBody);
+  $('#delBtn').addEventListener('click', () => current && removeNote(current));
+  search.addEventListener('input', () => render());
+  panel.addEventListener('mousedown', e => { if (e.target === panel) closeEditor(); });
+  wrapChk.addEventListener('change', () => {
+    bodyIn.setAttribute('wrap', wrapChk.checked ? 'soft' : 'off');
+    bodyIn.style.whiteSpace = wrapChk.checked ? 'pre-wrap' : 'pre';
+  });
+
+  // Si cierran la pestaña con cambios sin guardar, se intenta enviarlos igualmente
+  window.addEventListener('beforeunload', () => {
+    if (current && dirty && base){
+      try {
+        fetch(base + API_PATH + '/' + current, {
+          method: 'PATCH', keepalive: true, headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ [FIELD_TITLE]: titleIn.value, [FIELD_BODY]: bodyIn.value })
+        });
+      } catch {}
+    }
+  });
+})();
+</script>
+</body>
+</html>
